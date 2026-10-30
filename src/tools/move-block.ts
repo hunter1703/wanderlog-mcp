@@ -7,6 +7,7 @@ import { resolvePlaceRef, type PlaceRefMatch } from "../resolvers/place-ref.js";
 import type { Block, Section, TripPlan } from "../types.js";
 import { isPlaceBlock, isTransitBlock } from "../types.js";
 import { submitOp } from "./shared.js";
+import { findNoteMatches } from "./remove-note.js";
 
 export const moveBlockInputSchema = z
   .object({
@@ -205,6 +206,23 @@ function buildMove(
 }
 
 function resolveUniqueBlock(trip: TripPlan, ref: string, label: string): PlaceRefMatch {
+  if (ref.toLowerCase().startsWith("note:")) {
+    const query = ref.slice(5).trim();
+    const notes = findNoteMatches(trip, query);
+    if (notes.length !== 1) {
+      throw new WanderlogValidationError(
+        `The ${label} reference "${ref}" matched ${notes.length} notes.`,
+        "Use a longer, unique substring of the note text.",
+      );
+    }
+    const n = notes[0]!;
+    return {
+      sectionIndex: n.sectionIndex,
+      blockIndex: n.blockIndex,
+      section: trip.itinerary.sections[n.sectionIndex]!,
+      block: n.block,
+    } as PlaceRefMatch;
+  }
   const result = resolvePlaceRef(trip, ref);
   if (result.kind === "none") {
     throw new WanderlogValidationError(
